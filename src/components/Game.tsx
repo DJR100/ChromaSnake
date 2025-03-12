@@ -181,7 +181,11 @@ export default function Game() {
       // Check if food is eaten
       if (head.x === prevState.food.x && head.y === prevState.food.y) {
         const newScore = prevState.score + 1;
-        const newSpeed = Math.max(50, prevState.speed - Math.floor(newScore / 5) * 20);
+        // Calculate speed reduction based on score threshold
+        const speedReduction = newScore <= 10 
+          ? Math.floor(newScore / 5) * 20  // Original speed increase up to score 10
+          : (2 * 20) + Math.floor((newScore - 10) / 5) * 8; // Much slower increase after 10
+        const newSpeed = Math.max(50, prevState.speed - speedReduction);
         
         return {
           ...prevState,
