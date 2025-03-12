@@ -1,46 +1,66 @@
-# Welcome to your Expo app 👋
+# ChromaSnake
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A colorful twist on the classic Snake game, built with React Native and Expo.
 
-## Get started
+## Features
 
-1. Install dependencies
+- Classic snake gameplay with a color-changing mechanic
+- 5 different food colors that change the snake's appearance
+- Increasing difficulty as you progress
+- High score tracking
+- Retro-style graphics
+- Touch controls
+- Obstacle navigation
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js (v14 or higher)
+- npm or yarn
+- Expo Go app on your mobile device
+
+### Installation
+
+1. Clone the repository
+2. Install dependencies:
 
    ```bash
    npm install
    ```
 
-2. Start the app
+### Running the Game
+
+1. Start the development server:
 
    ```bash
-    npx expo start
+   npm start
    ```
 
-In the output, you'll find options to open the app in a
+2. Scan the QR code with your mobile device:
+   - iOS: Use the Camera app
+   - Android: Use the Expo Go app
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## How to Play
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+- Swipe or use the on-screen controls to change the snake's direction
+- Eat food to grow and change colors
+- Avoid hitting:
+  - The walls
+  - The grey obstacles
+  - Your own tail
+- Try to achieve the highest score!
 
-## Get a fresh project
+## Game Controls
 
-When you're ready, run:
+- Up arrow: Move up
+- Down arrow: Move down
+- Left arrow: Move left
+- Right arrow: Move right
 
-```bash
-npm run reset-project
-```
+## Version
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+v0.1.0 - Initial MVP release
 
 ## Join the community
 
