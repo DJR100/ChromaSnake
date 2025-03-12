@@ -28,7 +28,7 @@ RUN npm ci
 COPY . .
 
 # Build web version
-RUN npx expo export:web
+RUN npx expo export -p web
 
 # Final stage for app image
 FROM base
