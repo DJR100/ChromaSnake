@@ -27,13 +27,18 @@ RUN npm ci
 # Copy application code
 COPY . .
 
+# Build web version
+RUN npm run build:web
 
 # Final stage for app image
 FROM base
 
+# Install serve
+RUN npm install -g serve
+
 # Copy built application
-COPY --from=build /app /app
+COPY --from=build /app/web-build /app/web-build
 
 # Start the server by default, this can be overwritten at runtime
 EXPOSE 3000
-CMD [ "npm", "run", "start" ]
+CMD ["npx", "serve", "web-build", "--listen", "3000", "--single"]
