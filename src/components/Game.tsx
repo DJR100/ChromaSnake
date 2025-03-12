@@ -220,6 +220,22 @@ export default function Game() {
   const handleGameOver = () => {
     if (gameLoop.current) clearInterval(gameLoop.current);
     saveHighScore(gameState.score);
+
+    // Send score to React Native WebView if this is a real attempt
+    if (!gameState.isPractice) {
+      try {
+        if (typeof window !== 'undefined' && window.ReactNativeWebView) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'gameScore',
+            score: gameState.score,
+            isRealAttempt: true
+          }));
+        }
+      } catch (error) {
+        console.error('Error sending score:', error);
+      }
+    }
+
     setGameState(prev => ({ ...prev, gameOver: true }));
   };
 
