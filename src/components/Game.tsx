@@ -243,25 +243,28 @@ export default function Game() {
         const currentAttemptNumber = 3 - (gameState.realAttemptsLeft - 1);
         
         // Create a new scores array with the current score in the correct position
-        const updatedScores = [...gameState.realScores];
+        let updatedScores = [...gameState.realScores];
+        if (updatedScores.length < currentAttemptNumber) {
+          // Extend array if needed
+          updatedScores = Array(currentAttemptNumber).fill(0);
+        }
         updatedScores[currentAttemptNumber - 1] = gameState.score;
         
         console.log('Real attempt completed:', {
           attemptNumber: currentAttemptNumber,
           currentScore: gameState.score,
-          allScores: updatedScores
+          allScores: updatedScores,
+          realAttemptsLeft: gameState.realAttemptsLeft
         });
 
         // If this was the final attempt, send all scores to React Native
         if (gameState.realAttemptsLeft <= 1) {
           if (typeof window !== 'undefined' && window.ReactNativeWebView) {
-            // Filter out any undefined values and replace with 0
-            const finalScores = updatedScores.map(score => score || 0);
             const finalScoreData = {
               type: 'finalScores',
-              scores: finalScores,
+              scores: updatedScores,
               isComplete: true,
-              highestScore: Math.max(...finalScores)
+              highestScore: Math.max(...updatedScores)
             };
             console.log('Sending final scores:', finalScoreData);
             window.ReactNativeWebView.postMessage(JSON.stringify(finalScoreData));
@@ -315,7 +318,8 @@ export default function Game() {
           isPractice: false,
           practiceAttemptsLeft: 0,
           realAttemptsLeft: 3,
-          realScores: [] // Start with empty scores array for real attempts
+          realScores: [], // Start fresh for real attempts
+          score: 0
         };
       }
       
@@ -332,7 +336,8 @@ export default function Game() {
           isPractice: false,
           practiceAttemptsLeft: 0,
           realAttemptsLeft: prev.realAttemptsLeft - 1,
-          realScores: prev.realScores // Keep existing scores
+          realScores: prev.realScores, // Keep existing scores
+          score: 0 // Explicitly reset score
         };
       }
 
@@ -343,7 +348,8 @@ export default function Game() {
         isPractice: true,
         practiceAttemptsLeft: prev.practiceAttemptsLeft - 1,
         realAttemptsLeft: 3,
-        realScores: [] // Reset scores array in practice mode
+        realScores: [], // Reset scores array in practice mode
+        score: 0 // Explicitly reset score
       };
     });
   };
