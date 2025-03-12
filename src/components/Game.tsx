@@ -239,9 +239,12 @@ export default function Game() {
     // Only handle real attempts
     if (!gameState.isPractice) {
       try {
-        // Add current score to realScores array
+        // Calculate current attempt number (1-3)
         const currentAttemptNumber = 3 - (gameState.realAttemptsLeft - 1);
-        const updatedScores = [...gameState.realScores, gameState.score];
+        
+        // Create a new scores array with the current score in the correct position
+        const updatedScores = [...gameState.realScores];
+        updatedScores[currentAttemptNumber - 1] = gameState.score;
         
         console.log('Real attempt completed:', {
           attemptNumber: currentAttemptNumber,
@@ -252,11 +255,13 @@ export default function Game() {
         // If this was the final attempt, send all scores to React Native
         if (gameState.realAttemptsLeft <= 1) {
           if (typeof window !== 'undefined' && window.ReactNativeWebView) {
+            // Filter out any undefined values and replace with 0
+            const finalScores = updatedScores.map(score => score || 0);
             const finalScoreData = {
               type: 'finalScores',
-              scores: updatedScores,
+              scores: finalScores,
               isComplete: true,
-              highestScore: Math.max(...updatedScores)
+              highestScore: Math.max(...finalScores)
             };
             console.log('Sending final scores:', finalScoreData);
             window.ReactNativeWebView.postMessage(JSON.stringify(finalScoreData));
@@ -310,7 +315,7 @@ export default function Game() {
           isPractice: false,
           practiceAttemptsLeft: 0,
           realAttemptsLeft: 3,
-          realScores: [] // Reset scores when starting real attempts
+          realScores: [] // Start with empty scores array for real attempts
         };
       }
       
@@ -319,14 +324,26 @@ export default function Game() {
         return { ...initialState }; // Back to start with practice mode
       }
 
-      // Otherwise, decrement appropriate counter and maintain scores
+      // For real attempts, keep the scores array but reset other state
+      if (!prev.isPractice) {
+        return {
+          ...initialState,
+          showRules: false,
+          isPractice: false,
+          practiceAttemptsLeft: 0,
+          realAttemptsLeft: prev.realAttemptsLeft - 1,
+          realScores: prev.realScores // Keep existing scores
+        };
+      }
+
+      // For practice attempts
       return {
         ...initialState,
         showRules: false,
-        isPractice: prev.isPractice,
-        practiceAttemptsLeft: prev.isPractice ? prev.practiceAttemptsLeft - 1 : 0,
-        realAttemptsLeft: !prev.isPractice ? prev.realAttemptsLeft - 1 : 3,
-        realScores: prev.realScores // Maintain the scores array
+        isPractice: true,
+        practiceAttemptsLeft: prev.practiceAttemptsLeft - 1,
+        realAttemptsLeft: 3,
+        realScores: [] // Reset scores array in practice mode
       };
     });
   };
