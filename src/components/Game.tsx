@@ -46,6 +46,7 @@ const initialState = {
   isPractice: true,
   practiceAttemptsLeft: 3,
   realAttemptsLeft: 3,
+  realScores: [] as number[], // Track all real attempt scores
 };
 
 // Add type definition for obstacles
@@ -235,31 +236,47 @@ export default function Game() {
     if (gameLoop.current) clearInterval(gameLoop.current);
     saveHighScore(gameState.score);
 
-    // Only send score if this is a real attempt (not practice)
+    // Only handle real attempts
     if (!gameState.isPractice) {
       try {
-        if (typeof window !== 'undefined' && window.ReactNativeWebView) {
-          // Calculate which attempt number this is (1, 2, or 3)
-          const attemptNumber = 3 - (gameState.realAttemptsLeft - 1);
-          
-          const scoreData = {
-            type: 'gameScore',
-            score: gameState.score,
-            isRealAttempt: true,
-            attemptNumber: attemptNumber, // Which attempt this is (1-3)
-            attemptsLeft: gameState.realAttemptsLeft - 1, // How many attempts remain after this one
-            isFinalAttempt: gameState.realAttemptsLeft <= 1 // Whether this is the last attempt
-          };
+        // Add current score to realScores array
+        const currentAttemptNumber = 3 - (gameState.realAttemptsLeft - 1);
+        const updatedScores = [...gameState.realScores, gameState.score];
+        
+        console.log('Real attempt completed:', {
+          attemptNumber: currentAttemptNumber,
+          currentScore: gameState.score,
+          allScores: updatedScores
+        });
 
-          console.log('Sending real game score:', scoreData);
-          window.ReactNativeWebView.postMessage(JSON.stringify(scoreData));
+        // If this was the final attempt, send all scores to React Native
+        if (gameState.realAttemptsLeft <= 1) {
+          if (typeof window !== 'undefined' && window.ReactNativeWebView) {
+            const finalScoreData = {
+              type: 'finalScores',
+              scores: updatedScores,
+              isComplete: true,
+              highestScore: Math.max(...updatedScores)
+            };
+            console.log('Sending final scores:', finalScoreData);
+            window.ReactNativeWebView.postMessage(JSON.stringify(finalScoreData));
+          }
         }
-      } catch (error) {
-        console.error('Error sending score:', error);
-      }
-    }
 
-    setGameState(prev => ({ ...prev, gameOver: true }));
+        // Update game state with new score
+        setGameState(prev => ({
+          ...prev,
+          gameOver: true,
+          realScores: updatedScores
+        }));
+      } catch (error) {
+        console.error('Error handling game over:', error);
+        setGameState(prev => ({ ...prev, gameOver: true }));
+      }
+    } else {
+      // Practice attempt
+      setGameState(prev => ({ ...prev, gameOver: true }));
+    }
   };
 
   const handleGesture = (direction: string) => {
@@ -292,7 +309,8 @@ export default function Game() {
           showRules: false,
           isPractice: false,
           practiceAttemptsLeft: 0,
-          realAttemptsLeft: 3
+          realAttemptsLeft: 3,
+          realScores: [] // Reset scores when starting real attempts
         };
       }
       
@@ -301,13 +319,14 @@ export default function Game() {
         return { ...initialState }; // Back to start with practice mode
       }
 
-      // Otherwise, decrement appropriate counter
+      // Otherwise, decrement appropriate counter and maintain scores
       return {
         ...initialState,
         showRules: false,
         isPractice: prev.isPractice,
         practiceAttemptsLeft: prev.isPractice ? prev.practiceAttemptsLeft - 1 : 0,
-        realAttemptsLeft: !prev.isPractice ? prev.realAttemptsLeft - 1 : 3
+        realAttemptsLeft: !prev.isPractice ? prev.realAttemptsLeft - 1 : 3,
+        realScores: prev.realScores // Maintain the scores array
       };
     });
   };
