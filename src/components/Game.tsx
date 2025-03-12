@@ -181,13 +181,19 @@ export default function Game() {
       // Check if food is eaten
       if (head.x === prevState.food.x && head.y === prevState.food.y) {
         const newScore = prevState.score + 1;
+        console.log('Food eaten! Score update:', {
+          oldScore: prevState.score,
+          newScore: newScore,
+          isPractice: prevState.isPractice
+        });
+        
         // Calculate speed reduction based on score threshold
         const speedReduction = newScore <= 10 
           ? Math.floor(newScore / 5) * 20  // Original speed increase up to score 10
           : (2 * 20) + Math.floor((newScore - 10) / 5) * 8; // Much slower increase after 10
         const newSpeed = Math.max(50, prevState.speed - speedReduction);
         
-        return {
+        const newState = {
           ...prevState,
           snake: newSnake,
           score: newScore,
@@ -200,6 +206,14 @@ export default function Game() {
             ],
           },
         };
+        
+        console.log('New game state after food:', {
+          score: newState.score,
+          speed: newState.speed,
+          isPractice: newState.isPractice
+        });
+        
+        return newState;
       } else {
         newSnake.pop(); // Remove tail if no food eaten
         return {
@@ -221,15 +235,24 @@ export default function Game() {
     if (gameLoop.current) clearInterval(gameLoop.current);
     saveHighScore(gameState.score);
 
-    // Send score to React Native WebView if this is a real attempt
+    // Only send score if this is a real attempt (not practice)
     if (!gameState.isPractice) {
       try {
         if (typeof window !== 'undefined' && window.ReactNativeWebView) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
+          // Calculate which attempt number this is (1, 2, or 3)
+          const attemptNumber = 3 - (gameState.realAttemptsLeft - 1);
+          
+          const scoreData = {
             type: 'gameScore',
             score: gameState.score,
-            isRealAttempt: true
-          }));
+            isRealAttempt: true,
+            attemptNumber: attemptNumber, // Which attempt this is (1-3)
+            attemptsLeft: gameState.realAttemptsLeft - 1, // How many attempts remain after this one
+            isFinalAttempt: gameState.realAttemptsLeft <= 1 // Whether this is the last attempt
+          };
+
+          console.log('Sending real game score:', scoreData);
+          window.ReactNativeWebView.postMessage(JSON.stringify(scoreData));
         }
       } catch (error) {
         console.error('Error sending score:', error);
