@@ -55,7 +55,7 @@ const initialState = {
   practiceAttemptsLeft: 3,
   realAttemptsLeft: 3,
   realScores: [0, 0, 0],
-  currentAttemptNumber: 0,
+  currentAttemptNumber: 0, // For real game, this will be updated via resetGame.
 };
 
 // Type definition for obstacles
@@ -145,7 +145,12 @@ class ScoreTracker {
   }
 
   finalizeAttempt() {
+    // If currentAttempt is 0 (i.e. first attempt), treat it as attempt 1.
+    if (this.currentAttempt <= 0) {
+      this.currentAttempt = 1;
+    }
     if (this.currentAttempt > 0 && this.currentAttempt <= 3) {
+      // Ensure we record the score for the current attempt.
       if (this.currentScore > 0 || this.scores[this.currentAttempt - 1] === 0) {
         this.scores[this.currentAttempt - 1] = this.currentScore;
       }
@@ -300,10 +305,8 @@ export default function Game() {
     }
     const finalScore = scoreTracker.current.getCurrentScore();
 
-    // Update the scores array with this attempt's score
+    // Finalize this attempt and update our scores array.
     scoreTracker.current.finalizeAttempt();
-
-    // Sync latestScores with all attempt scores
     latestScores.current = scoreTracker.current.getAllScores();
 
     setGameState((prev) => ({
@@ -318,7 +321,7 @@ export default function Game() {
       if (typeof window !== "undefined" && window.ReactNativeWebView) {
         // Send the current attempt's score
         const scoreUpdate = {
-          type: "attemptScore", // Renamed for clarity
+          type: "attemptScore",
           attemptNumber: gameState.currentAttemptNumber,
           score: finalScore,
           attemptsLeft: gameState.realAttemptsLeft - 1,
@@ -328,7 +331,7 @@ export default function Game() {
         window.ReactNativeWebView.postMessage(JSON.stringify(scoreUpdate));
         console.log("Attempt score update sent:", scoreUpdate);
 
-        // After the final real attempt, send the highest score
+        // After the final real attempt, send comprehensive score data.
         if (!gameState.isPractice && gameState.realAttemptsLeft <= 1) {
           const highestScore = Math.max(
             ...latestScores.current.filter(
@@ -339,7 +342,15 @@ export default function Game() {
           const finalScoreData = {
             type: "finalScores",
             scores: latestScores.current,
-            highestScore: highestScore,
+            attemptScores: {
+              attempt1: latestScores.current[0] || 0,
+              attempt2: latestScores.current[1] || 0,
+              attempt3: latestScores.current[2] || 0,
+            },
+            allHighScores: {
+              sessionHighScore: highestScore,
+              overallHighScore: highScore,
+            },
             isComplete: true,
           };
           window.ReactNativeWebView.postMessage(JSON.stringify(finalScoreData));
@@ -382,6 +393,7 @@ export default function Game() {
   const resetGame = () => {
     setGameState((prev) => {
       if (prev.isPractice && prev.practiceAttemptsLeft <= 1) {
+        // Transition from practice to real game:
         scoreTracker.current.reset();
         latestScores.current = [0, 0, 0];
         return {
@@ -395,11 +407,13 @@ export default function Game() {
         };
       }
       if (!prev.isPractice && prev.realAttemptsLeft <= 1) {
+        // Game completely over
         scoreTracker.current.reset();
         latestScores.current = [0, 0, 0];
         return { ...initialState };
       }
       if (!prev.isPractice) {
+        // Next real attempt: update attempt number and start new attempt in the score tracker.
         const nextAttemptNumber = prev.currentAttemptNumber + 1;
         scoreTracker.current.startNewAttempt(
           nextAttemptNumber,
@@ -415,6 +429,7 @@ export default function Game() {
           currentAttemptNumber: nextAttemptNumber,
         };
       }
+      // For practice mode, simply decrement practiceAttemptsLeft.
       return {
         ...initialState,
         showRules: false,
@@ -549,7 +564,10 @@ export default function Game() {
                 ]}
               >
                 {gameState.isPractice
-                  ? `Practice ${Math.max(1, 4 - gameState.practiceAttemptsLeft)}/3`
+                  ? `Practice ${Math.max(
+                      1,
+                      4 - gameState.practiceAttemptsLeft
+                    )}/3`
                   : `Real ${Math.max(1, 4 - gameState.realAttemptsLeft)}/3`}
               </Text>
               {!gameState.isPractice && gameState.realAttemptsLeft <= 1 ? (
