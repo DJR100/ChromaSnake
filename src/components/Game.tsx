@@ -210,6 +210,7 @@ export default function Game() {
   // Add a ref to store the latest scores
   const latestScores = useRef<number[]>([0, 0, 0]);
   const expectedScore = useRef(0);
+  const speedCounter = useRef(0);
 
   // Load high score on mount
   useEffect(() => {
@@ -283,7 +284,8 @@ export default function Game() {
         console.log(`Score after increment: ${newScore}`);
         
         // Track food eaten (for speed calculation)
-        const foodEaten = scoreTracker.current.incrementFoodEaten();
+        speedCounter.current++;
+        const foodEaten = speedCounter.current;
         
         // Slower logarithmic curve with a maximum cap
         const speedReduction = Math.min(60, Math.floor(7 * Math.log(foodEaten + 1)));
@@ -397,7 +399,7 @@ export default function Game() {
           const scoreUpdate = {
             type: 'attemptScore',
             attemptNumber: currentAttemptNumber,
-            score: gameStateScore,
+            score: scoreToSend,
             attemptsLeft: gameState.realAttemptsLeft - 1,
             allScores: scoresToUse,
             isHighScore: scoreToSend > highScore
