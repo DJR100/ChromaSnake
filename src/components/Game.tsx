@@ -300,6 +300,12 @@ export default function Game() {
     }
     const finalScore = scoreTracker.current.getCurrentScore();
 
+    // Update the scores array with this attempt's score
+    scoreTracker.current.finalizeAttempt();
+
+    // Sync latestScores with all attempt scores
+    latestScores.current = scoreTracker.current.getAllScores();
+
     setGameState((prev) => ({
       ...prev,
       gameOver: true,
@@ -307,17 +313,47 @@ export default function Game() {
       realScores: latestScores.current,
     }));
 
-    if (typeof window !== "undefined" && window.ReactNativeWebView) {
-      const scoreUpdate = {
-        type: "finalScore",
-        score: finalScore,
-        isHighScore: finalScore > highScore,
-      };
-      window.ReactNativeWebView.postMessage(JSON.stringify(scoreUpdate));
-      console.log("Final score update sent:", scoreUpdate);
-    } else {
-      console.warn("ReactNativeWebView not available for final score update");
-    }
+    // Decouple score sending from game speed using setTimeout
+    setTimeout(() => {
+      if (typeof window !== "undefined" && window.ReactNativeWebView) {
+        // Send the current attempt's score
+        const scoreUpdate = {
+          type: "attemptScore", // Renamed for clarity
+          attemptNumber: gameState.currentAttemptNumber,
+          score: finalScore,
+          attemptsLeft: gameState.realAttemptsLeft - 1,
+          allScores: latestScores.current,
+          isHighScore: finalScore > highScore,
+        };
+        window.ReactNativeWebView.postMessage(JSON.stringify(scoreUpdate));
+        console.log("Attempt score update sent:", scoreUpdate);
+
+        // After the final real attempt, send the highest score
+        if (!gameState.isPractice && gameState.realAttemptsLeft <= 1) {
+          const highestScore = Math.max(
+            ...latestScores.current.filter(
+              (score) => typeof score === "number" && !isNaN(score)
+            )
+          );
+
+          const finalScoreData = {
+            type: "finalScores",
+            scores: latestScores.current,
+            highestScore: highestScore,
+            isComplete: true,
+          };
+          window.ReactNativeWebView.postMessage(JSON.stringify(finalScoreData));
+          console.log("Final scores sent:", finalScoreData);
+
+          // Optionally update the overall high score
+          if (highestScore > highScore) {
+            saveHighScore(highestScore);
+          }
+        }
+      } else {
+        console.warn("ReactNativeWebView not available");
+      }
+    }, 100); // Short delay to ensure game state is fully updated
   };
 
   // Handle gesture-based direction changes.
