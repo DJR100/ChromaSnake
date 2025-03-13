@@ -346,8 +346,8 @@ export default function Game() {
         const currentAttemptNumber = 3 - (gameState.realAttemptsLeft - 1);
         
         // Use the game state score as our source of truth, but ensure we don't lose low scores
-        const scoreToSend = 150; // Hardcode a value above 100
-        console.log(`Hardcoded score: ${scoreToSend}`);
+        const scoreToSend = Number(gameStateScore > 0 ? gameStateScore : trackerScore);
+        console.log(`Type of scoreToSend: ${typeof scoreToSend}, Value: ${scoreToSend}`);
         
         // Create a copy of the current scores before finalizing
         const currentScores = [...scoreTracker.current.getAllScores()];
