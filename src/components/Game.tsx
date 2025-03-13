@@ -29,7 +29,7 @@ const COLORS = {
   BLACK: "#000000",
 };
 
-// Add these direction constants
+// Directions
 const DIRECTIONS = {
   UP: { x: 0, y: -1 },
   DOWN: { x: 0, y: 1 },
@@ -54,27 +54,25 @@ const initialState = {
   isPractice: true,
   practiceAttemptsLeft: 3,
   realAttemptsLeft: 3,
-  realScores: [0, 0, 0] as number[], // Initialize with zeros
+  realScores: [0, 0, 0],
   currentAttemptNumber: 0,
 };
 
-// Add type definition for obstacles
+// Type definition for obstacles
 type Obstacle = {
   x: number;
   y: number;
 };
 
-// Generate random position
+// Get a random position on the grid
 const getRandomPosition = () => ({
   x: Math.floor(Math.random() * GRID_WIDTH),
   y: Math.floor(Math.random() * GRID_HEIGHT),
 });
 
-// Generate obstacles
+// Generate obstacles (a few 2x2 blocks)
 const generateObstacles = (): Obstacle[] => {
   const obstacles: Obstacle[] = [];
-
-  // Create a 2x2 pattern of obstacles in three locations
   const patternLocations = [
     {
       startX: Math.floor(GRID_WIDTH * 0.25),
@@ -91,7 +89,6 @@ const generateObstacles = (): Obstacle[] => {
   ];
 
   patternLocations.forEach((location) => {
-    // Create a 2x2 block of obstacles
     for (let i = 0; i < 2; i++) {
       for (let j = 0; j < 2; j++) {
         obstacles.push({
@@ -101,44 +98,10 @@ const generateObstacles = (): Obstacle[] => {
       }
     }
   });
-
   return obstacles;
 };
 
-// Alternative pattern option (uncomment to try different pattern):
-/*
-const generateObstacles = () => {
-  const obstacles = [];
-
-  // Create a cross pattern in the middle of the board
-  const centerX = Math.floor(GRID_WIDTH * 0.5);
-  const centerY = Math.floor(GRID_HEIGHT * 0.5);
-
-  // Horizontal line
-  for (let i = -1; i <= 1; i++) {
-    obstacles.push({ x: centerX + i, y: centerY });
-  }
-
-  // Vertical line
-  for (let i = -1; i <= 1; i++) {
-    if (i !== 0) { // Skip center as it's already added
-      obstacles.push({ x: centerX, y: centerY + i });
-    }
-  }
-
-  return obstacles;
-};
-*/
-
-// Add pixel art effect styles
-const pixelArtEffect = {
-  textShadow: "2px 2px #000",
-  fontFamily: "monospace", // Fallback until we add custom font
-  textTransform: "uppercase" as const,
-  letterSpacing: 2,
-};
-
-// Add ScoreTracker class before the Game component
+// ScoreTracker class to keep score reliably
 class ScoreTracker {
   private scores: number[];
   private currentScore: number;
@@ -152,13 +115,13 @@ class ScoreTracker {
     this.foodEatenCount = 0;
   }
 
-  // Track food eaten (for speed calculations)
+  // Track food eaten (for potential speed calculations)
   incrementFoodEaten() {
     this.foodEatenCount++;
     return this.foodEatenCount;
   }
 
-  // Track score (completely independent from food eaten)
+  // Increment score by a given number of points
   incrementScore(points: number) {
     this.currentScore += points;
     console.log(
@@ -172,26 +135,21 @@ class ScoreTracker {
   }
 
   startNewAttempt(attemptNumber: number, previousScores?: number[]) {
-    // If previous scores are provided, use them to initialize the scores array
     if (previousScores && previousScores.length === 3) {
       this.scores = [...previousScores];
       console.log("Starting new attempt with preserved scores:", this.scores);
     }
-
     this.currentAttempt = attemptNumber;
     this.currentScore = 0;
     this.foodEatenCount = 0;
   }
 
   finalizeAttempt() {
-    // Store the score in the appropriate array position
     if (this.currentAttempt > 0 && this.currentAttempt <= 3) {
-      // Ensure we don't overwrite a non-zero score with zero
       if (this.currentScore > 0 || this.scores[this.currentAttempt - 1] === 0) {
         this.scores[this.currentAttempt - 1] = this.currentScore;
       }
     }
-
     return {
       scores: [...this.scores],
       currentScore: this.currentScore,
@@ -214,12 +172,12 @@ class ScoreTracker {
   }
 }
 
-// Helper function to calculate points based on snake length
+// Helper function to calculate points when food is eaten
 function calculatePointsForFood(
   food: { x: number; y: number; color: string },
   snakeLength: number
 ) {
-  // Simply return 10 points for each new block added
+  // For simplicity, each food gives 10 points.
   return 10;
 }
 
@@ -227,12 +185,9 @@ export default function Game() {
   const [gameState, setGameState] = useState({ ...initialState });
   const [highScore, setHighScore] = useState(0);
   const [obstacles] = useState(generateObstacles());
-  const gameLoop = useRef<NodeJS.Timeout>();
+  const gameLoopInterval = useRef<NodeJS.Timeout | null>(null);
   const scoreTracker = useRef(new ScoreTracker());
-  // Add a ref to store the latest scores
   const latestScores = useRef<number[]>([0, 0, 0]);
-  const expectedScore = useRef(0);
-  const speedCounter = useRef(0);
 
   // Load high score on mount
   useEffect(() => {
@@ -250,7 +205,6 @@ export default function Game() {
 
   const saveHighScore = async (score: number) => {
     try {
-      // Only save to AsyncStorage if it's a new high score
       if (score > highScore) {
         await AsyncStorage.setItem("highScore", score.toString());
         setHighScore(score);
@@ -260,6 +214,7 @@ export default function Game() {
     }
   };
 
+  // Main game loop: move the snake and handle food consumption
   const moveSnake = () => {
     setGameState((prevState) => {
       const newSnake = [...prevState.snake];
@@ -270,11 +225,11 @@ export default function Game() {
       head.x += direction.x;
       head.y += direction.y;
 
-      if (head.x < 0) head.x = GRID_WIDTH - 1;
-      if (head.x >= GRID_WIDTH) head.x = 0;
-      if (head.y < 0) head.y = GRID_HEIGHT - 1;
-      if (head.y >= GRID_HEIGHT) head.y = 0;
+      // Wrap the snake around the grid edges
+      head.x = (head.x + GRID_WIDTH) % GRID_WIDTH;
+      head.y = (head.y + GRID_HEIGHT) % GRID_HEIGHT;
 
+      // Check collision with obstacles or self
       if (
         obstacles.some((obs) => obs.x === head.x && obs.y === head.y) ||
         newSnake.some((segment) => segment.x === head.x && segment.y === head.y)
@@ -285,49 +240,24 @@ export default function Game() {
 
       newSnake.unshift(head);
 
+      // If food is eaten, update score using the ref and adjust speed
       if (head.x === prevState.food.x && head.y === prevState.food.y) {
-        // Calculate points based on snake length
         const pointsEarned = calculatePointsForFood(
           prevState.food,
           newSnake.length
         );
-        console.log(`Points earned this round: ${pointsEarned}`);
+        scoreTracker.current.incrementScore(pointsEarned);
 
-        if (!prevState.isPractice) {
-          expectedScore.current += pointsEarned;
-          console.log(`Expected cumulative score: ${expectedScore.current}`);
-        }
-
-        // Log score before incrementing
-        console.log(
-          `Score before increment: ${scoreTracker.current.getCurrentScore()}`
+        // Calculate new speed (with a cap)
+        const newSpeed = Math.max(
+          80,
+          prevState.speed -
+            Math.min(60, Math.floor(7 * Math.log(newSnake.length + 1)))
         );
 
-        // Update the score
-        const newScore = !prevState.isPractice
-          ? scoreTracker.current.incrementScore(pointsEarned)
-          : prevState.score + pointsEarned;
-
-        // Log score after incrementing
-        console.log(`Score after increment: ${newScore}`);
-
-        // Track food eaten (for speed calculation)
-        speedCounter.current++;
-        const foodEaten = speedCounter.current;
-
-        // Slower logarithmic curve with a maximum cap
-        const speedReduction = Math.min(
-          60,
-          Math.floor(7 * Math.log(foodEaten + 1))
-        );
-        // Ensure speed doesn't go below 80ms (keeping the game playable)
-        const newSpeed = Math.max(80, prevState.speed - speedReduction);
-
-        const newState = {
+        return {
           ...prevState,
           snake: newSnake,
-          score: newScore,
-          speed: newSpeed,
           snakeColor: prevState.food.color,
           food: {
             ...getRandomPosition(),
@@ -335,9 +265,9 @@ export default function Game() {
               (c) => c !== COLORS.GREY && c !== COLORS.BLACK
             )[Math.floor(Math.random() * 5)],
           },
+          speed: newSpeed,
+          score: scoreTracker.current.getCurrentScore(), // update UI display
         };
-
-        return newState;
       } else {
         newSnake.pop();
         return {
@@ -348,190 +278,49 @@ export default function Game() {
     });
   };
 
+  // Set up the game loop using a ref-managed interval.
   useEffect(() => {
-    if (!gameState.gameOver) {
-      const interval = setInterval(moveSnake, gameState.speed);
-      return () => clearInterval(interval);
+    if (gameLoopInterval.current) {
+      clearInterval(gameLoopInterval.current);
     }
+    if (!gameState.gameOver) {
+      gameLoopInterval.current = setInterval(moveSnake, gameState.speed);
+    }
+    return () => {
+      if (gameLoopInterval.current) {
+        clearInterval(gameLoopInterval.current);
+      }
+    };
   }, [gameState.speed, gameState.gameOver]);
 
+  // Handle game over: clear the interval and send final score using the ref value.
   const handleGameOver = () => {
-    if (gameLoop.current) clearInterval(gameLoop.current);
+    if (gameLoopInterval.current) {
+      clearInterval(gameLoopInterval.current);
+    }
+    const finalScore = scoreTracker.current.getCurrentScore();
 
-    if (!gameState.isPractice) {
-      try {
-        const gameStateScore = gameState.score;
-        const trackerScore = scoreTracker.current.getCurrentScore();
+    setGameState((prev) => ({
+      ...prev,
+      gameOver: true,
+      score: finalScore,
+      realScores: latestScores.current,
+    }));
 
-        console.log(`SCORE VERIFICATION:
-          - Game State Score: ${gameStateScore}
-          - Tracker Score: ${trackerScore}
-          - Expected Score: ${expectedScore.current}
-        `);
-
-        if (gameStateScore !== expectedScore.current) {
-          console.warn(`Score discrepancy detected!
-            Expected: ${expectedScore.current},
-            Actual: ${gameStateScore}`);
-        }
-
-        // IMPORTANT: Capture all scores BEFORE any operations that might reset them
-        const currentAttemptNumber = 3 - (gameState.realAttemptsLeft - 1);
-
-        // Use the game state score as our source of truth, but ensure we don't lose low scores
-        const scoreToSend = Number(
-          gameStateScore > 0 ? gameStateScore : trackerScore
-        );
-        console.log(
-          `Type of scoreToSend: ${typeof scoreToSend}, Value: ${scoreToSend}`
-        );
-
-        // Create a copy of the current scores before finalizing
-        const currentScores = [...scoreTracker.current.getAllScores()];
-
-        // Preserve any existing scores from latestScores
-        for (let i = 0; i < 3; i++) {
-          if (i !== currentAttemptNumber - 1 && latestScores.current[i] > 0) {
-            currentScores[i] = latestScores.current[i];
-          }
-        }
-
-        // Manually update the scores array with our score
-        if (currentAttemptNumber > 0 && currentAttemptNumber <= 3) {
-          currentScores[currentAttemptNumber - 1] = scoreToSend;
-        }
-
-        // Now finalize the attempt (this might reset internal state)
-        const finalScores = scoreTracker.current.finalizeAttempt();
-
-        // Use our manually updated scores to ensure correctness
-        const scoresToUse = currentScores;
-
-        // Store the latest scores in our ref for consistent access
-        latestScores.current = [...scoresToUse];
-
-        console.log("=== GAME OVER DEBUG ===");
-        console.log("Current State:", {
-          currentAttemptNumber,
-          realAttemptsLeft: gameState.realAttemptsLeft,
-          gameStateScore,
-          trackerScore,
-          scoreToSend,
-          currentScores,
-          finalScores,
-          scoresToUse,
-          latestScoresRef: latestScores.current,
-        });
-
-        // Before sending the score, ensure scores below 5 are properly counted
-        if (scoreToSend < 5 && scoreToSend > 0) {
-          console.log(`Adding low score value: ${scoreToSend}`);
-          // Make sure this score is included in the total
-        }
-
-        // CHANGE: Update state first, then send scores after a short delay to ensure complete state transition
-        setGameState((prev) => ({
-          ...prev,
-          gameOver: true,
-          realScores: latestScores.current,
-        }));
-
-        // Completely decouple the score transmission from the game speed
-        setTimeout(() => {
-          // Send intermediate score update
-          if (typeof window !== "undefined" && window.ReactNativeWebView) {
-            const scoreUpdate = {
-              type: "attemptScore",
-              attemptNumber: currentAttemptNumber,
-              score: scoreToSend,
-              attemptsLeft: gameState.realAttemptsLeft - 1,
-              allScores: scoresToUse,
-              isHighScore: scoreToSend > highScore,
-            };
-            console.log(
-              "SENDING SCORE UPDATE:",
-              JSON.stringify(scoreUpdate, null, 2)
-            );
-            console.log(`FINAL SCORE CHECK:
-              - Raw score value: ${scoreToSend}
-              - Type: ${typeof scoreToSend}
-              - JSON stringified: ${JSON.stringify(scoreToSend)}
-            `);
-            window.ReactNativeWebView.postMessage(JSON.stringify(scoreUpdate));
-            console.log("SCORE UPDATE SENT");
-
-            // Verify the message was sent
-            console.log("Score update sent successfully");
-          } else {
-            console.warn("ReactNativeWebView not available for score update");
-          }
-
-          // If this was the final attempt, send all scores
-          if (gameState.realAttemptsLeft <= 1) {
-            if (typeof window !== "undefined" && window.ReactNativeWebView) {
-              // Use latestScores.current instead of finalScores.scores
-              const sanitizedScores = latestScores.current.map((score) =>
-                typeof score === "number" && !isNaN(score) ? score : 0
-              );
-              const highestScore = Math.max(
-                ...sanitizedScores.filter(
-                  (score) => !isNaN(score) && score !== null
-                )
-              );
-
-              const finalScoreData = {
-                type: "finalScores",
-                scores: sanitizedScores,
-                isComplete: true,
-                highestScore,
-                attemptScores: {
-                  attempt1: sanitizedScores[0] || 0,
-                  attempt2: sanitizedScores[1] || 0,
-                  attempt3: sanitizedScores[2] || 0,
-                },
-                allHighScores: {
-                  sessionHighScore: highestScore,
-                  overallHighScore: highScore,
-                },
-              };
-              console.log(
-                "Sending final scores to React Native:",
-                finalScoreData
-              );
-              window.ReactNativeWebView.postMessage(
-                JSON.stringify(finalScoreData)
-              );
-              console.log("Final scores sent successfully");
-            } else {
-              console.warn("ReactNativeWebView not available for final scores");
-            }
-          }
-        }, 100); // Short delay to ensure game state is fully updated
-
-        console.log("=== END GAME OVER DEBUG ===");
-
-        // In handleGameOver, right before sending the data
-        console.log("FINAL DATA CHECK:");
-        console.log("- Game State Score:", gameStateScore);
-        console.log("- Tracker Score:", trackerScore);
-        console.log(
-          "- Food Eaten Count:",
-          scoreTracker.current.getFoodEatenCount()
-        );
-        console.log(
-          "- Food Eaten * 10:",
-          scoreTracker.current.getFoodEatenCount() * 10
-        );
-        console.log("- Score To Send:", scoreToSend);
-      } catch (error) {
-        console.error("Error in handleGameOver:", error);
-        setGameState((prev) => ({ ...prev, gameOver: true }));
-      }
+    if (typeof window !== "undefined" && window.ReactNativeWebView) {
+      const scoreUpdate = {
+        type: "finalScore",
+        score: finalScore,
+        isHighScore: finalScore > highScore,
+      };
+      window.ReactNativeWebView.postMessage(JSON.stringify(scoreUpdate));
+      console.log("Final score update sent:", scoreUpdate);
     } else {
-      setGameState((prev) => ({ ...prev, gameOver: true }));
+      console.warn("ReactNativeWebView not available for final score update");
     }
   };
 
+  // Handle gesture-based direction changes.
   const handleGesture = (direction: string) => {
     const opposites = {
       UP: "DOWN",
@@ -541,7 +330,6 @@ export default function Game() {
     };
 
     setGameState((prevState) => {
-      // Prevent moving in opposite direction
       if (
         prevState.direction === opposites[direction as keyof typeof opposites]
       ) {
@@ -558,10 +346,8 @@ export default function Game() {
   const resetGame = () => {
     setGameState((prev) => {
       if (prev.isPractice && prev.practiceAttemptsLeft <= 1) {
-        // Transitioning from practice to real game
         scoreTracker.current.reset();
         latestScores.current = [0, 0, 0];
-        expectedScore.current = 0;
         return {
           ...initialState,
           showRules: false,
@@ -572,44 +358,27 @@ export default function Game() {
           currentAttemptNumber: 1,
         };
       }
-
       if (!prev.isPractice && prev.realAttemptsLeft <= 1) {
-        // Game completely over
         scoreTracker.current.reset();
         latestScores.current = [0, 0, 0];
-        expectedScore.current = 0;
         return { ...initialState };
       }
-
       if (!prev.isPractice) {
-        // Moving to next real attempt
         const nextAttemptNumber = prev.currentAttemptNumber + 1;
-
-        // Log current scores before starting new attempt
-        console.log("Before new attempt - latestScores:", latestScores.current);
-        console.log(
-          "Before new attempt - scoreTracker scores:",
-          scoreTracker.current.getAllScores()
-        );
-
-        // Start new attempt with preserved scores
         scoreTracker.current.startNewAttempt(
           nextAttemptNumber,
           latestScores.current
         );
-
         return {
           ...initialState,
           showRules: false,
           isPractice: false,
           practiceAttemptsLeft: 0,
           realAttemptsLeft: prev.realAttemptsLeft - 1,
-          realScores: latestScores.current, // Use latestScores instead of scoreTracker.getAllScores()
+          realScores: latestScores.current,
           currentAttemptNumber: nextAttemptNumber,
         };
       }
-
-      // Moving to next practice attempt
       return {
         ...initialState,
         showRules: false,
@@ -622,25 +391,21 @@ export default function Game() {
     });
   };
 
-  // Modify the swipe gesture to only allow 90-degree turns
+  // Swipe gesture handling (only allowing 90-degree turns)
   const swipeGesture = Gesture.Pan().onEnd((event) => {
     const { translationX, translationY } = event;
-
-    // Only allow turning if the swipe is significantly in one direction
     if (Math.abs(translationX) > Math.abs(translationY) * 2) {
-      // Horizontal swipe - only allow if currently moving vertically
       if (gameState.direction === "UP" || gameState.direction === "DOWN") {
         handleGesture(translationX > 0 ? "RIGHT" : "LEFT");
       }
     } else if (Math.abs(translationY) > Math.abs(translationX) * 2) {
-      // Vertical swipe - only allow if currently moving horizontally
       if (gameState.direction === "LEFT" || gameState.direction === "RIGHT") {
         handleGesture(translationY > 0 ? "DOWN" : "UP");
       }
     }
   });
 
-  // Add Rules Screen component
+  // Rules screen component
   const RulesScreen = () => (
     <View style={styles.rulesScreen}>
       <Text style={styles.rulesTitle}>CHROMA{"\n"}SNAKE</Text>
@@ -664,12 +429,11 @@ export default function Game() {
     </View>
   );
 
-  // Add attempt phase text component
+  // Display current attempt info
   const AttemptsDisplay = () => {
     const attemptNumber = gameState.isPractice
       ? Math.max(1, 4 - gameState.practiceAttemptsLeft)
       : Math.max(1, 4 - gameState.realAttemptsLeft);
-
     return (
       <View style={styles.attemptsContainer}>
         <Text
@@ -696,12 +460,10 @@ export default function Game() {
               <AttemptsDisplay />
             </View>
           </View>
-
           <GestureDetector gesture={swipeGesture}>
             <View
               style={[styles.gameBoard, { borderColor: gameState.snakeColor }]}
             >
-              {/* Render snake */}
               {gameState.snake.map((segment, index) => (
                 <View
                   key={index}
@@ -715,8 +477,6 @@ export default function Game() {
                   ]}
                 />
               ))}
-
-              {/* Render food */}
               <View
                 style={[
                   styles.cell,
@@ -727,8 +487,6 @@ export default function Game() {
                   },
                 ]}
               />
-
-              {/* Render obstacles */}
               {obstacles.map((obstacle, index) => (
                 <View
                   key={`obstacle-${index}`}
@@ -744,7 +502,6 @@ export default function Game() {
               ))}
             </View>
           </GestureDetector>
-
           {gameState.gameOver && (
             <View style={styles.gameOver}>
               <Text style={styles.gameOverText}>Game Over!</Text>
