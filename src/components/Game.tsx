@@ -397,7 +397,7 @@ export default function Game() {
           const scoreUpdate = {
             type: 'attemptScore',
             attemptNumber: currentAttemptNumber,
-            score: scoreToSend,
+            score: gameStateScore,
             attemptsLeft: gameState.realAttemptsLeft - 1,
             allScores: scoresToUse,
             isHighScore: scoreToSend > highScore
@@ -459,6 +459,14 @@ export default function Game() {
         }));
 
         console.log('=== END GAME OVER DEBUG ===');
+
+        // In handleGameOver, right before sending the data
+        console.log('FINAL DATA CHECK:');
+        console.log('- Game State Score:', gameStateScore);
+        console.log('- Tracker Score:', trackerScore);
+        console.log('- Food Eaten Count:', scoreTracker.current.getFoodEatenCount());
+        console.log('- Food Eaten * 10:', scoreTracker.current.getFoodEatenCount() * 10);
+        console.log('- Score To Send:', scoreToSend);
       } catch (error) {
         console.error('Error in handleGameOver:', error);
         setGameState(prev => ({ ...prev, gameOver: true }));
