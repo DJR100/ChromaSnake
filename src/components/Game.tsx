@@ -152,7 +152,13 @@ class ScoreTracker {
     return this.currentScore;
   }
 
-  startNewAttempt(attemptNumber: number) {
+  startNewAttempt(attemptNumber: number, previousScores?: number[]) {
+    // If previous scores are provided, use them to initialize the scores array
+    if (previousScores && previousScores.length === 3) {
+      this.scores = [...previousScores];
+      console.log('Starting new attempt with preserved scores:', this.scores);
+    }
+    
     this.currentAttempt = attemptNumber;
     this.currentScore = 0;
     this.foodEatenCount = 0;
@@ -319,6 +325,13 @@ export default function Game() {
         // Create a copy of the current scores before finalizing
         const currentScores = [...scoreTracker.current.getAllScores()];
         
+        // Preserve any existing scores from latestScores
+        for (let i = 0; i < 3; i++) {
+          if (i !== currentAttemptNumber - 1 && latestScores.current[i] > 0) {
+            currentScores[i] = latestScores.current[i];
+          }
+        }
+        
         // Manually update the scores array with our score
         if (currentAttemptNumber > 0 && currentAttemptNumber <= 3) {
           currentScores[currentAttemptNumber - 1] = scoreToSend;
@@ -447,6 +460,7 @@ export default function Game() {
   const resetGame = () => {
     setGameState(prev => {
       if (prev.isPractice && prev.practiceAttemptsLeft <= 1) {
+        // Transitioning from practice to real game
         scoreTracker.current.reset();
         latestScores.current = [0, 0, 0];
         return {
@@ -461,14 +475,23 @@ export default function Game() {
       }
       
       if (!prev.isPractice && prev.realAttemptsLeft <= 1) {
+        // Game completely over
         scoreTracker.current.reset();
         latestScores.current = [0, 0, 0];
         return { ...initialState };
       }
 
       if (!prev.isPractice) {
+        // Moving to next real attempt
         const nextAttemptNumber = prev.currentAttemptNumber + 1;
-        scoreTracker.current.startNewAttempt(nextAttemptNumber);
+        
+        // Log current scores before starting new attempt
+        console.log('Before new attempt - latestScores:', latestScores.current);
+        console.log('Before new attempt - scoreTracker scores:', scoreTracker.current.getAllScores());
+        
+        // Start new attempt with preserved scores
+        scoreTracker.current.startNewAttempt(nextAttemptNumber, latestScores.current);
+        
         return {
           ...initialState,
           showRules: false,
@@ -480,6 +503,7 @@ export default function Game() {
         };
       }
 
+      // Moving to next practice attempt
       return {
         ...initialState,
         showRules: false,
