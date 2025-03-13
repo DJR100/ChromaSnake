@@ -201,6 +201,8 @@ export default function Game() {
   const [obstacles] = useState(generateObstacles());
   const gameLoop = useRef<NodeJS.Timeout>();
   const scoreTracker = useRef(new ScoreTracker());
+  // Add a ref to store the latest scores
+  const latestScores = useRef<number[]>([0, 0, 0]);
 
   // Load high score on mount
   useEffect(() => {
@@ -328,6 +330,9 @@ export default function Game() {
         // Use our manually updated scores to ensure correctness
         const scoresToUse = currentScores;
         
+        // Store the latest scores in our ref for consistent access
+        latestScores.current = [...scoresToUse];
+        
         console.log('=== GAME OVER DEBUG ===');
         console.log('Current State:', {
           currentAttemptNumber,
@@ -337,7 +342,8 @@ export default function Game() {
           scoreToSend,
           currentScores,
           finalScores,
-          scoresToUse
+          scoresToUse,
+          latestScoresRef: latestScores.current
         });
 
         // Before sending the score, ensure scores below 5 are properly counted
@@ -369,9 +375,8 @@ export default function Game() {
         // If this was the final attempt, send all scores
         if (gameState.realAttemptsLeft <= 1) {
           if (typeof window !== 'undefined' && window.ReactNativeWebView) {
-            const allScores = finalScores.scores;
-            // Sanitize scores to ensure we don't have incorrect zeros
-            const sanitizedScores = allScores.map(score => 
+            // Use latestScores.current instead of finalScores.scores
+            const sanitizedScores = latestScores.current.map(score => 
               typeof score === 'number' && !isNaN(score) ? score : 0
             );
             const highestScore = Math.max(...sanitizedScores.filter(score => !isNaN(score) && score !== null));
@@ -400,12 +405,12 @@ export default function Game() {
         }
 
         // Log state before update
-        console.log('Setting game state with scores:', finalScores.scores);
+        console.log('Setting game state with scores:', latestScores.current);
         
         setGameState(prev => ({
           ...prev,
           gameOver: true,
-          realScores: finalScores.scores
+          realScores: latestScores.current
         }));
 
         console.log('=== END GAME OVER DEBUG ===');
@@ -443,6 +448,7 @@ export default function Game() {
     setGameState(prev => {
       if (prev.isPractice && prev.practiceAttemptsLeft <= 1) {
         scoreTracker.current.reset();
+        latestScores.current = [0, 0, 0];
         return {
           ...initialState,
           showRules: false,
@@ -456,6 +462,7 @@ export default function Game() {
       
       if (!prev.isPractice && prev.realAttemptsLeft <= 1) {
         scoreTracker.current.reset();
+        latestScores.current = [0, 0, 0];
         return { ...initialState };
       }
 
@@ -468,7 +475,7 @@ export default function Game() {
           isPractice: false,
           practiceAttemptsLeft: 0,
           realAttemptsLeft: prev.realAttemptsLeft - 1,
-          realScores: scoreTracker.current.getAllScores(),
+          realScores: latestScores.current, // Use latestScores instead of scoreTracker.getAllScores()
           currentAttemptNumber: nextAttemptNumber
         };
       }
