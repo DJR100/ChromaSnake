@@ -121,11 +121,68 @@ const pixelArtEffect = {
   letterSpacing: 2,
 };
 
+// Add ScoreTracker class before the Game component
+class ScoreTracker {
+  private scores: number[];
+  private currentScore: number;
+  private currentAttempt: number;
+  private foodEatenCount: number;
+
+  constructor() {
+    this.scores = [0, 0, 0];
+    this.currentScore = 0;
+    this.currentAttempt = 0;
+    this.foodEatenCount = 0;
+  }
+
+  incrementScore() {
+    this.foodEatenCount++;
+    this.currentScore = this.foodEatenCount;
+    return this.currentScore;
+  }
+
+  getCurrentScore() {
+    return this.currentScore;
+  }
+
+  startNewAttempt(attemptNumber: number) {
+    this.currentAttempt = attemptNumber;
+    this.currentScore = 0;
+    this.foodEatenCount = 0;
+  }
+
+  finalizeAttempt() {
+    // Store the score in the appropriate array position
+    if (this.currentAttempt > 0 && this.currentAttempt <= 3) {
+      this.scores[this.currentAttempt - 1] = this.currentScore;
+    }
+    
+    // Return both the scores array and the current score
+    // This ensures we have access to the current score even after finalization
+    return {
+      scores: [...this.scores],
+      currentScore: this.currentScore
+    };
+  }
+
+  getAllScores() {
+    return [...this.scores];
+  }
+
+  reset() {
+    this.scores = [0, 0, 0];
+    this.currentScore = 0;
+    this.currentAttempt = 0;
+    this.foodEatenCount = 0;
+  }
+}
+
 export default function Game() {
   const [gameState, setGameState] = useState({ ...initialState });
   const [highScore, setHighScore] = useState(0);
   const [obstacles] = useState(generateObstacles());
   const gameLoop = useRef<NodeJS.Timeout>();
+  const scoreTracker = useRef(new ScoreTracker());
 
   // Load high score on mount
   useEffect(() => {
@@ -159,17 +216,14 @@ export default function Game() {
       const head = { ...newSnake[0] };
       const direction = DIRECTIONS[prevState.direction as keyof typeof DIRECTIONS];
 
-      // Move head one block in the current direction
       head.x += direction.x;
       head.y += direction.y;
 
-      // Wrap around the game board
       if (head.x < 0) head.x = GRID_WIDTH - 1;
       if (head.x >= GRID_WIDTH) head.x = 0;
       if (head.y < 0) head.y = GRID_HEIGHT - 1;
       if (head.y >= GRID_HEIGHT) head.y = 0;
 
-      // Check collisions with obstacles and self
       if (
         obstacles.some(obs => obs.x === head.x && obs.y === head.y) ||
         newSnake.some(segment => segment.x === head.x && segment.y === head.y)
@@ -178,24 +232,24 @@ export default function Game() {
         return prevState;
       }
 
-      // Add new head
       newSnake.unshift(head);
 
-      // Check if food is eaten
       if (head.x === prevState.food.x && head.y === prevState.food.y) {
-        const newScore = prevState.score + 1;
-        console.log('Food eaten! Score update:', {
-          oldScore: prevState.score,
-          newScore: newScore,
+        const newScore = !prevState.isPractice ? scoreTracker.current.incrementScore() : prevState.score + 1;
+        
+        console.log('=== SCORE UPDATE DEBUG ===');
+        console.log('Food eaten:', {
+          newScore,
+          trackerScore: scoreTracker.current.getCurrentScore(),
           isPractice: prevState.isPractice,
-          currentAttemptNumber: prevState.currentAttemptNumber,
-          realScores: prevState.realScores
+          currentAttempt: prevState.currentAttemptNumber,
+          allScores: scoreTracker.current.getAllScores()
         });
         
         // Calculate speed reduction based on score threshold
         const speedReduction = newScore <= 10 
-          ? Math.floor(newScore / 5) * 20  // Original speed increase up to score 10
-          : (2 * 20) + Math.floor((newScore - 10) / 5) * 8; // Much slower increase after 10
+          ? Math.floor(newScore / 5) * 20
+          : (2 * 20) + Math.floor((newScore - 10) / 5) * 8;
         const newSpeed = Math.max(50, prevState.speed - speedReduction);
         
         const newState = {
@@ -212,17 +266,9 @@ export default function Game() {
           },
         };
         
-        console.log('New game state after food:', {
-          score: newState.score,
-          speed: newState.speed,
-          isPractice: newState.isPractice,
-          currentAttemptNumber: newState.currentAttemptNumber,
-          realScores: newState.realScores
-        });
-        
         return newState;
       } else {
-        newSnake.pop(); // Remove tail if no food eaten
+        newSnake.pop();
         return {
           ...prevState,
           snake: newSnake,
@@ -241,65 +287,76 @@ export default function Game() {
   const handleGameOver = () => {
     if (gameLoop.current) clearInterval(gameLoop.current);
     
-    // Only handle real attempts
     if (!gameState.isPractice) {
       try {
-        // Calculate current attempt number (1-3)
+        // IMPORTANT: Capture all scores BEFORE any operations that might reset them
         const currentAttemptNumber = 3 - (gameState.realAttemptsLeft - 1);
+        const gameStateScore = gameState.score;
+        const trackerScore = scoreTracker.current.getCurrentScore();
         
-        // Create a new scores array, preserving previous scores
-        const updatedScores = [...gameState.realScores];
+        // Use the game state score as our source of truth
+        const scoreToSend = gameStateScore;
         
-        // Store the current score in the correct position (0-based index)
-        updatedScores[currentAttemptNumber - 1] = gameState.score;
-
-        // Save high score after updating the scores array
-        saveHighScore(gameState.score);
+        // Create a copy of the current scores before finalizing
+        const currentScores = [...scoreTracker.current.getAllScores()];
         
-        console.log('Real attempt completed:', {
-          attemptNumber: currentAttemptNumber,
-          currentScore: gameState.score,
-          allScores: updatedScores,
+        // Manually update the scores array with our score
+        if (currentAttemptNumber > 0 && currentAttemptNumber <= 3) {
+          currentScores[currentAttemptNumber - 1] = scoreToSend;
+        }
+        
+        // Now finalize the attempt (this might reset internal state)
+        const finalScores = scoreTracker.current.finalizeAttempt();
+        
+        // Use our manually updated scores to ensure correctness
+        const scoresToUse = currentScores;
+        
+        console.log('=== GAME OVER DEBUG ===');
+        console.log('Current State:', {
+          currentAttemptNumber,
           realAttemptsLeft: gameState.realAttemptsLeft,
-          scoreAtIndex: updatedScores[currentAttemptNumber - 1],
-          currentHighScore: highScore,
-          gameState: {
-            score: gameState.score,
-            currentAttemptNumber: gameState.currentAttemptNumber,
-            realScores: gameState.realScores,
-            isPractice: gameState.isPractice
-          }
+          gameStateScore,
+          trackerScore,
+          scoreToSend,
+          currentScores,
+          finalScores,
+          scoresToUse
         });
 
-        // Send intermediate score update regardless of score value
+        // Send intermediate score update
         if (typeof window !== 'undefined' && window.ReactNativeWebView) {
           const scoreUpdate = {
             type: 'attemptScore',
             attemptNumber: currentAttemptNumber,
-            score: gameState.score,
+            score: scoreToSend, // Use the game state score
             attemptsLeft: gameState.realAttemptsLeft - 1,
-            allScores: updatedScores,
-            isHighScore: gameState.score > highScore
+            allScores: scoresToUse, // Use our manually updated scores
+            isHighScore: scoreToSend > highScore
           };
-          console.log('Sending attempt score to React Native:', scoreUpdate);
+          console.log('Sending to React Native:', scoreUpdate);
           window.ReactNativeWebView.postMessage(JSON.stringify(scoreUpdate));
+          
+          // Verify the message was sent
+          console.log('Score update sent successfully');
+        } else {
+          console.warn('ReactNativeWebView not available for score update');
         }
 
         // If this was the final attempt, send all scores
         if (gameState.realAttemptsLeft <= 1) {
           if (typeof window !== 'undefined' && window.ReactNativeWebView) {
-            // Calculate highest score correctly from all attempts
-            const highestScore = Math.max(...updatedScores.filter(score => !isNaN(score) && score !== null));
+            const allScores = finalScores.scores;
+            const highestScore = Math.max(...allScores.filter(score => !isNaN(score) && score !== null));
             
             const finalScoreData = {
               type: 'finalScores',
-              scores: updatedScores,
+              scores: allScores,
               isComplete: true,
-              highestScore: highestScore,
+              highestScore,
               attemptScores: {
-                attempt1: updatedScores[0] || 0,
-                attempt2: updatedScores[1] || 0,
-                attempt3: updatedScores[2] || 0
+                attempt1: allScores[0] || 0,
+                attempt2: allScores[1] || 0,
+                attempt3: allScores[2] || 0
               },
               allHighScores: {
                 sessionHighScore: highestScore,
@@ -308,23 +365,27 @@ export default function Game() {
             };
             console.log('Sending final scores to React Native:', finalScoreData);
             window.ReactNativeWebView.postMessage(JSON.stringify(finalScoreData));
+            console.log('Final scores sent successfully');
+          } else {
+            console.warn('ReactNativeWebView not available for final scores');
           }
         }
 
-        // Update game state with new score
+        // Log state before update
+        console.log('Setting game state with scores:', finalScores.scores);
+        
         setGameState(prev => ({
           ...prev,
           gameOver: true,
-          realScores: updatedScores,
-          currentAttemptNumber
+          realScores: finalScores.scores
         }));
+
+        console.log('=== END GAME OVER DEBUG ===');
       } catch (error) {
-        console.error('Error handling game over:', error);
+        console.error('Error in handleGameOver:', error);
         setGameState(prev => ({ ...prev, gameOver: true }));
       }
     } else {
-      // Practice attempt - still save high score but don't send to React Native
-      saveHighScore(gameState.score);
       setGameState(prev => ({ ...prev, gameOver: true }));
     }
   };
@@ -352,9 +413,8 @@ export default function Game() {
 
   const resetGame = () => {
     setGameState(prev => {
-      // If in practice mode and no practice attempts left, switch to real attempts
       if (prev.isPractice && prev.practiceAttemptsLeft <= 1) {
-        console.log('Starting real attempts with fresh scores');
+        scoreTracker.current.reset();
         return {
           ...initialState,
           showRules: false,
@@ -362,39 +422,29 @@ export default function Game() {
           practiceAttemptsLeft: 0,
           realAttemptsLeft: 3,
           realScores: [0, 0, 0],
-          currentAttemptNumber: 1,
-          score: 0
+          currentAttemptNumber: 1
         };
       }
       
-      // If in real mode and no attempts left, game is completely over
       if (!prev.isPractice && prev.realAttemptsLeft <= 1) {
-        console.log('Game completely over, resetting to initial state');
+        scoreTracker.current.reset();
         return { ...initialState };
       }
 
-      // For real attempts, keep the scores array but reset other state
       if (!prev.isPractice) {
         const nextAttemptNumber = prev.currentAttemptNumber + 1;
-        console.log('Next real attempt:', {
-          currentScores: prev.realScores,
-          nextAttemptNumber,
-          attemptsLeft: prev.realAttemptsLeft - 1
-        });
+        scoreTracker.current.startNewAttempt(nextAttemptNumber);
         return {
           ...initialState,
           showRules: false,
           isPractice: false,
           practiceAttemptsLeft: 0,
           realAttemptsLeft: prev.realAttemptsLeft - 1,
-          realScores: prev.realScores,
-          currentAttemptNumber: nextAttemptNumber,
-          score: 0
+          realScores: scoreTracker.current.getAllScores(),
+          currentAttemptNumber: nextAttemptNumber
         };
       }
 
-      // For practice attempts
-      console.log('Next practice attempt');
       return {
         ...initialState,
         showRules: false,
@@ -402,8 +452,7 @@ export default function Game() {
         practiceAttemptsLeft: prev.practiceAttemptsLeft - 1,
         realAttemptsLeft: 3,
         realScores: [0, 0, 0],
-        currentAttemptNumber: 0,
-        score: 0
+        currentAttemptNumber: 0
       };
     });
   };
