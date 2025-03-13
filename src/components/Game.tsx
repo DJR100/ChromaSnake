@@ -46,8 +46,8 @@ const initialState = {
   isPractice: true,
   practiceAttemptsLeft: 3,
   realAttemptsLeft: 3,
-  realScores: [] as number[], // Track all real attempt scores
-  currentAttemptNumber: 0,    // Track which attempt we're on
+  realScores: [0, 0, 0] as number[], // Initialize with zeros
+  currentAttemptNumber: 0,
 };
 
 // Add type definition for obstacles
@@ -143,6 +143,7 @@ export default function Game() {
 
   const saveHighScore = async (score: number) => {
     try {
+      // Only save to AsyncStorage if it's a new high score
       if (score > highScore) {
         await AsyncStorage.setItem('highScore', score.toString());
         setHighScore(score);
@@ -186,7 +187,9 @@ export default function Game() {
         console.log('Food eaten! Score update:', {
           oldScore: prevState.score,
           newScore: newScore,
-          isPractice: prevState.isPractice
+          isPractice: prevState.isPractice,
+          currentAttemptNumber: prevState.currentAttemptNumber,
+          realScores: prevState.realScores
         });
         
         // Calculate speed reduction based on score threshold
@@ -212,7 +215,9 @@ export default function Game() {
         console.log('New game state after food:', {
           score: newState.score,
           speed: newState.speed,
-          isPractice: newState.isPractice
+          isPractice: newState.isPractice,
+          currentAttemptNumber: newState.currentAttemptNumber,
+          realScores: newState.realScores
         });
         
         return newState;
@@ -235,60 +240,74 @@ export default function Game() {
 
   const handleGameOver = () => {
     if (gameLoop.current) clearInterval(gameLoop.current);
-    saveHighScore(gameState.score);
-
+    
     // Only handle real attempts
     if (!gameState.isPractice) {
       try {
         // Calculate current attempt number (1-3)
         const currentAttemptNumber = 3 - (gameState.realAttemptsLeft - 1);
         
-        // Create a new scores array with the current score in the correct position
-        let updatedScores = [...gameState.realScores];
+        // Create a new scores array, preserving previous scores
+        const updatedScores = [...gameState.realScores];
         
-        // Ensure array is properly sized
-        while (updatedScores.length < 3) {
-          updatedScores.push(0);
-        }
-        
-        // Store the current score in the correct position
+        // Store the current score in the correct position (0-based index)
         updatedScores[currentAttemptNumber - 1] = gameState.score;
+
+        // Save high score after updating the scores array
+        saveHighScore(gameState.score);
         
         console.log('Real attempt completed:', {
           attemptNumber: currentAttemptNumber,
           currentScore: gameState.score,
           allScores: updatedScores,
-          realAttemptsLeft: gameState.realAttemptsLeft
+          realAttemptsLeft: gameState.realAttemptsLeft,
+          scoreAtIndex: updatedScores[currentAttemptNumber - 1],
+          currentHighScore: highScore,
+          gameState: {
+            score: gameState.score,
+            currentAttemptNumber: gameState.currentAttemptNumber,
+            realScores: gameState.realScores,
+            isPractice: gameState.isPractice
+          }
         });
 
-        // If this was the final attempt, send all scores to React Native
+        // Send intermediate score update regardless of score value
+        if (typeof window !== 'undefined' && window.ReactNativeWebView) {
+          const scoreUpdate = {
+            type: 'attemptScore',
+            attemptNumber: currentAttemptNumber,
+            score: gameState.score,
+            attemptsLeft: gameState.realAttemptsLeft - 1,
+            allScores: updatedScores,
+            isHighScore: gameState.score > highScore
+          };
+          console.log('Sending attempt score to React Native:', scoreUpdate);
+          window.ReactNativeWebView.postMessage(JSON.stringify(scoreUpdate));
+        }
+
+        // If this was the final attempt, send all scores
         if (gameState.realAttemptsLeft <= 1) {
           if (typeof window !== 'undefined' && window.ReactNativeWebView) {
+            // Calculate highest score correctly from all attempts
+            const highestScore = Math.max(...updatedScores.filter(score => !isNaN(score) && score !== null));
+            
             const finalScoreData = {
               type: 'finalScores',
               scores: updatedScores,
               isComplete: true,
-              highestScore: Math.max(...updatedScores),
+              highestScore: highestScore,
               attemptScores: {
-                attempt1: updatedScores[0],
-                attempt2: updatedScores[1],
-                attempt3: updatedScores[2]
+                attempt1: updatedScores[0] || 0,
+                attempt2: updatedScores[1] || 0,
+                attempt3: updatedScores[2] || 0
+              },
+              allHighScores: {
+                sessionHighScore: highestScore,
+                overallHighScore: highScore
               }
             };
             console.log('Sending final scores to React Native:', finalScoreData);
             window.ReactNativeWebView.postMessage(JSON.stringify(finalScoreData));
-          }
-        } else {
-          // Send intermediate score update
-          if (typeof window !== 'undefined' && window.ReactNativeWebView) {
-            const scoreUpdate = {
-              type: 'attemptScore',
-              attemptNumber: currentAttemptNumber,
-              score: gameState.score,
-              attemptsLeft: gameState.realAttemptsLeft - 1
-            };
-            console.log('Sending attempt score to React Native:', scoreUpdate);
-            window.ReactNativeWebView.postMessage(JSON.stringify(scoreUpdate));
           }
         }
 
@@ -304,7 +323,8 @@ export default function Game() {
         setGameState(prev => ({ ...prev, gameOver: true }));
       }
     } else {
-      // Practice attempt
+      // Practice attempt - still save high score but don't send to React Native
+      saveHighScore(gameState.score);
       setGameState(prev => ({ ...prev, gameOver: true }));
     }
   };
@@ -334,13 +354,14 @@ export default function Game() {
     setGameState(prev => {
       // If in practice mode and no practice attempts left, switch to real attempts
       if (prev.isPractice && prev.practiceAttemptsLeft <= 1) {
+        console.log('Starting real attempts with fresh scores');
         return {
           ...initialState,
           showRules: false,
           isPractice: false,
           practiceAttemptsLeft: 0,
           realAttemptsLeft: 3,
-          realScores: [], // Start fresh for real attempts
+          realScores: [0, 0, 0],
           currentAttemptNumber: 1,
           score: 0
         };
@@ -348,32 +369,39 @@ export default function Game() {
       
       // If in real mode and no attempts left, game is completely over
       if (!prev.isPractice && prev.realAttemptsLeft <= 1) {
-        return { ...initialState }; // Back to start with practice mode
+        console.log('Game completely over, resetting to initial state');
+        return { ...initialState };
       }
 
       // For real attempts, keep the scores array but reset other state
       if (!prev.isPractice) {
         const nextAttemptNumber = prev.currentAttemptNumber + 1;
+        console.log('Next real attempt:', {
+          currentScores: prev.realScores,
+          nextAttemptNumber,
+          attemptsLeft: prev.realAttemptsLeft - 1
+        });
         return {
           ...initialState,
           showRules: false,
           isPractice: false,
           practiceAttemptsLeft: 0,
           realAttemptsLeft: prev.realAttemptsLeft - 1,
-          realScores: prev.realScores, // Keep existing scores
+          realScores: prev.realScores,
           currentAttemptNumber: nextAttemptNumber,
           score: 0
         };
       }
 
       // For practice attempts
+      console.log('Next practice attempt');
       return {
         ...initialState,
         showRules: false,
         isPractice: true,
         practiceAttemptsLeft: prev.practiceAttemptsLeft - 1,
         realAttemptsLeft: 3,
-        realScores: [], // Reset scores array in practice mode
+        realScores: [0, 0, 0],
         currentAttemptNumber: 0,
         score: 0
       };
