@@ -209,6 +209,7 @@ export default function Game() {
   const scoreTracker = useRef(new ScoreTracker());
   // Add a ref to store the latest scores
   const latestScores = useRef<number[]>([0, 0, 0]);
+  const expectedScore = useRef(0);
 
   // Load high score on mount
   useEffect(() => {
@@ -261,16 +262,28 @@ export default function Game() {
       newSnake.unshift(head);
 
       if (head.x === prevState.food.x && head.y === prevState.food.y) {
-        // Track food eaten (for speed calculation)
-        const foodEaten = scoreTracker.current.incrementFoodEaten();
-        
         // Calculate points based on snake length
         const pointsEarned = calculatePointsForFood(prevState.food, newSnake.length);
+        console.log(`Points earned this round: ${pointsEarned}`);
         
-        // Update the score (independent from food eaten count)
+        if (!prevState.isPractice) {
+          expectedScore.current += pointsEarned;
+          console.log(`Expected cumulative score: ${expectedScore.current}`);
+        }
+        
+        // Log score before incrementing
+        console.log(`Score before increment: ${scoreTracker.current.getCurrentScore()}`);
+        
+        // Update the score
         const newScore = !prevState.isPractice 
           ? scoreTracker.current.incrementScore(pointsEarned) 
           : prevState.score + pointsEarned;
+        
+        // Log score after incrementing
+        console.log(`Score after increment: ${newScore}`);
+        
+        // Track food eaten (for speed calculation)
+        const foodEaten = scoreTracker.current.incrementFoodEaten();
         
         // Logarithmic speed reduction - faster at first, then tapers off
         const speedReduction = Math.floor(10 * Math.log(foodEaten + 1));
@@ -314,10 +327,23 @@ export default function Game() {
     
     if (!gameState.isPractice) {
       try {
-        // IMPORTANT: Capture all scores BEFORE any operations that might reset them
-        const currentAttemptNumber = 3 - (gameState.realAttemptsLeft - 1);
         const gameStateScore = gameState.score;
         const trackerScore = scoreTracker.current.getCurrentScore();
+        
+        console.log(`SCORE VERIFICATION:
+          - Game State Score: ${gameStateScore}
+          - Tracker Score: ${trackerScore}
+          - Expected Score: ${expectedScore.current}
+        `);
+        
+        if (gameStateScore !== expectedScore.current) {
+          console.warn(`Score discrepancy detected! 
+            Expected: ${expectedScore.current}, 
+            Actual: ${gameStateScore}`);
+        }
+        
+        // IMPORTANT: Capture all scores BEFORE any operations that might reset them
+        const currentAttemptNumber = 3 - (gameState.realAttemptsLeft - 1);
         
         // Use the game state score as our source of truth, but ensure we don't lose low scores
         const scoreToSend = Number(gameStateScore > 0 ? gameStateScore : trackerScore);
@@ -377,6 +403,11 @@ export default function Game() {
             isHighScore: scoreToSend > highScore
           };
           console.log('SENDING SCORE UPDATE:', JSON.stringify(scoreUpdate, null, 2));
+          console.log(`FINAL SCORE CHECK:
+            - Raw score value: ${scoreToSend}
+            - Type: ${typeof scoreToSend}
+            - JSON stringified: ${JSON.stringify(scoreToSend)}
+          `);
           window.ReactNativeWebView.postMessage(JSON.stringify(scoreUpdate));
           console.log('SCORE UPDATE SENT');
           
@@ -464,6 +495,7 @@ export default function Game() {
         // Transitioning from practice to real game
         scoreTracker.current.reset();
         latestScores.current = [0, 0, 0];
+        expectedScore.current = 0;
         return {
           ...initialState,
           showRules: false,
@@ -479,6 +511,7 @@ export default function Game() {
         // Game completely over
         scoreTracker.current.reset();
         latestScores.current = [0, 0, 0];
+        expectedScore.current = 0;
         return { ...initialState };
       }
 
