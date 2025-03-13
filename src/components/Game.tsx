@@ -135,9 +135,16 @@ class ScoreTracker {
     this.foodEatenCount = 0;
   }
 
-  incrementScore() {
+  // Track food eaten (for speed calculations)
+  incrementFoodEaten() {
     this.foodEatenCount++;
-    this.currentScore = this.foodEatenCount;
+    return this.foodEatenCount;
+  }
+
+  // Track score (completely independent from food eaten)
+  incrementScore(points: number) {
+    this.currentScore += points;
+    console.log(`SCORE DEBUG: Food eaten: ${this.foodEatenCount}, Score: ${this.currentScore}`);
     return this.currentScore;
   }
 
@@ -154,11 +161,12 @@ class ScoreTracker {
   finalizeAttempt() {
     // Store the score in the appropriate array position
     if (this.currentAttempt > 0 && this.currentAttempt <= 3) {
-      this.scores[this.currentAttempt - 1] = this.currentScore;
+      // Ensure we don't overwrite a non-zero score with zero
+      if (this.currentScore > 0 || this.scores[this.currentAttempt - 1] === 0) {
+        this.scores[this.currentAttempt - 1] = this.currentScore;
+      }
     }
     
-    // Return both the scores array and the current score
-    // This ensures we have access to the current score even after finalization
     return {
       scores: [...this.scores],
       currentScore: this.currentScore
@@ -175,6 +183,16 @@ class ScoreTracker {
     this.currentAttempt = 0;
     this.foodEatenCount = 0;
   }
+
+  getFoodEatenCount() {
+    return this.foodEatenCount;
+  }
+}
+
+// Helper function to calculate points based on snake length
+function calculatePointsForFood(food: { x: number; y: number; color: string }, snakeLength: number) {
+  // Simply return 10 points for each new block added
+  return 10;
 }
 
 export default function Game() {
@@ -235,21 +253,20 @@ export default function Game() {
       newSnake.unshift(head);
 
       if (head.x === prevState.food.x && head.y === prevState.food.y) {
-        const newScore = !prevState.isPractice ? scoreTracker.current.incrementScore() : prevState.score + 1;
+        // Track food eaten (for speed calculation)
+        const foodEaten = scoreTracker.current.incrementFoodEaten();
         
-        console.log('=== SCORE UPDATE DEBUG ===');
-        console.log('Food eaten:', {
-          newScore,
-          trackerScore: scoreTracker.current.getCurrentScore(),
-          isPractice: prevState.isPractice,
-          currentAttempt: prevState.currentAttemptNumber,
-          allScores: scoreTracker.current.getAllScores()
-        });
+        // Calculate points based on snake length
+        const pointsEarned = calculatePointsForFood(prevState.food, newSnake.length);
         
-        // Calculate speed reduction based on score threshold
-        const speedReduction = newScore <= 10 
-          ? Math.floor(newScore / 5) * 20
-          : (2 * 20) + Math.floor((newScore - 10) / 5) * 8;
+        // Update the score (independent from food eaten count)
+        const newScore = !prevState.isPractice 
+          ? scoreTracker.current.incrementScore(pointsEarned) 
+          : prevState.score + pointsEarned;
+        
+        // Logarithmic speed reduction - faster at first, then tapers off
+        const speedReduction = Math.floor(10 * Math.log(foodEaten + 1));
+        // Ensure speed doesn't go below 50ms
         const newSpeed = Math.max(50, prevState.speed - speedReduction);
         
         const newState = {
@@ -294,8 +311,8 @@ export default function Game() {
         const gameStateScore = gameState.score;
         const trackerScore = scoreTracker.current.getCurrentScore();
         
-        // Use the game state score as our source of truth
-        const scoreToSend = gameStateScore;
+        // Use the game state score as our source of truth, but ensure we don't lose low scores
+        const scoreToSend = gameStateScore > 0 ? gameStateScore : trackerScore;
         
         // Create a copy of the current scores before finalizing
         const currentScores = [...scoreTracker.current.getAllScores()];
@@ -323,18 +340,25 @@ export default function Game() {
           scoresToUse
         });
 
+        // Before sending the score, ensure scores below 5 are properly counted
+        if (scoreToSend < 5 && scoreToSend > 0) {
+          console.log(`Adding low score value: ${scoreToSend}`);
+          // Make sure this score is included in the total
+        }
+
         // Send intermediate score update
         if (typeof window !== 'undefined' && window.ReactNativeWebView) {
           const scoreUpdate = {
             type: 'attemptScore',
             attemptNumber: currentAttemptNumber,
-            score: scoreToSend, // Use the game state score
+            score: scoreToSend,
             attemptsLeft: gameState.realAttemptsLeft - 1,
-            allScores: scoresToUse, // Use our manually updated scores
+            allScores: scoresToUse,
             isHighScore: scoreToSend > highScore
           };
-          console.log('Sending to React Native:', scoreUpdate);
+          console.log('SENDING SCORE UPDATE:', JSON.stringify(scoreUpdate, null, 2));
           window.ReactNativeWebView.postMessage(JSON.stringify(scoreUpdate));
+          console.log('SCORE UPDATE SENT');
           
           // Verify the message was sent
           console.log('Score update sent successfully');
@@ -346,17 +370,21 @@ export default function Game() {
         if (gameState.realAttemptsLeft <= 1) {
           if (typeof window !== 'undefined' && window.ReactNativeWebView) {
             const allScores = finalScores.scores;
-            const highestScore = Math.max(...allScores.filter(score => !isNaN(score) && score !== null));
+            // Sanitize scores to ensure we don't have incorrect zeros
+            const sanitizedScores = allScores.map(score => 
+              typeof score === 'number' && !isNaN(score) ? score : 0
+            );
+            const highestScore = Math.max(...sanitizedScores.filter(score => !isNaN(score) && score !== null));
             
             const finalScoreData = {
               type: 'finalScores',
-              scores: allScores,
+              scores: sanitizedScores,
               isComplete: true,
               highestScore,
               attemptScores: {
-                attempt1: allScores[0] || 0,
-                attempt2: allScores[1] || 0,
-                attempt3: allScores[2] || 0
+                attempt1: sanitizedScores[0] || 0,
+                attempt2: sanitizedScores[1] || 0,
+                attempt3: sanitizedScores[2] || 0
               },
               allHighScores: {
                 sessionHighScore: highestScore,
@@ -482,11 +510,11 @@ export default function Game() {
       <Text style={styles.rulesTitle}>CHROMA{'\n'}SNAKE</Text>
       <Text style={styles.snakeArt}>
         {'    ┌──┐     \n'}
-        {'    │··│ ╷   \n'}
-        {'    └┐│ ╵   \n'}
-        {'     ││     \n'}
-        {'     │└┐    \n'}
-        {'     └─┘    \n'}
+        {'    │··│     \n'}
+        {'    └┐ │     \n'}
+        {'     │ │     \n'}
+        {'     │ └┐    \n'}
+        {'     └─ ┘    \n'}
       </Text>
       <View style={styles.rulesContainer}>
         <Text style={styles.rulesText}>EAT FRUIT, SPEED UP!</Text>

@@ -1,5 +1,4 @@
 interface Window {
-  ReactNativeWebView?: {
-    postMessage(message: string): void;
+  ReactNativeWebView?: {postMessage(message: string): void;
   };
 } 
