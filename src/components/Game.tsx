@@ -286,7 +286,7 @@ export default function Game() {
         const foodEaten = scoreTracker.current.incrementFoodEaten();
         
         // Logarithmic speed reduction - faster at first, then tapers off
-        const speedReduction = Math.floor(10 * Math.log(foodEaten + 1));
+        const speedReduction = 0; // No speed increase
         // Ensure speed doesn't go below 50ms
         const newSpeed = Math.max(50, prevState.speed - speedReduction);
         
