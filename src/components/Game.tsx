@@ -285,10 +285,10 @@ export default function Game() {
         // Track food eaten (for speed calculation)
         const foodEaten = scoreTracker.current.incrementFoodEaten();
         
-        // Logarithmic speed reduction - faster at first, then tapers off
-        const speedReduction = 0; // No speed increase
-        // Ensure speed doesn't go below 50ms
-        const newSpeed = Math.max(50, prevState.speed - speedReduction);
+        // Slower logarithmic curve with a maximum cap
+        const speedReduction = Math.min(60, Math.floor(7 * Math.log(foodEaten + 1)));
+        // Ensure speed doesn't go below 80ms (keeping the game playable)
+        const newSpeed = Math.max(80, prevState.speed - speedReduction);
         
         const newState = {
           ...prevState,
